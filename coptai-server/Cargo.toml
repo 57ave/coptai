@@ -1,0 +1,23 @@
+[package]
+name = "coptai-server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "coptai-server"
+path = "src/main.rs"
+
+[dependencies]
+coptai-core = { path = "../coptai-core" }
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+metrics = "0.22"
+metrics-exporter-prometheus = "0.13"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+envy = "0.4.2"
