@@ -1,0 +1,7 @@
+/target
+.env
+*.env
+
+tokenizer.json
+Claude.md
+Notes.md

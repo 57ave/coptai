@@ -1,0 +1,3 @@
+[workspace]
+members = ["coptai-core", "coptai-server", "coptai-cli"]
+resolver = "2"
