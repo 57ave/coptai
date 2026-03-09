@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # -------------------------------------------------------------------------
+  # coptai-core — CPU only, no CUDA/Metal on CI runners
+  # -------------------------------------------------------------------------
+  core:
+    name: coptai-core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-core-${{ hashFiles('coptai-core/Cargo.toml', 'Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-core-
+
+      - name: Build
+        run: cargo build -p coptai-core
+
+      - name: Test
+        run: cargo test -p coptai-core
+
+  # -------------------------------------------------------------------------
+  # coptai-server — depends on coptai-core, needs cmake for tokenizers
+  # -------------------------------------------------------------------------
+  server:
+    name: coptai-server
+    runs-on: ubuntu-latest
+    needs: core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system deps (tokenizers needs cmake)
+        run: sudo apt-get install -y cmake
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-server-${{ hashFiles('coptai-server/Cargo.toml', 'Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-server-
+
+      - name: Build
+        run: cargo build -p coptai-server
+
+      - name: Test
+        run: cargo test -p coptai-server
+
+  # -------------------------------------------------------------------------
+  # coptai-cli — depends on coptai-core, also checks benches compile
+  # -------------------------------------------------------------------------
+  cli:
+    name: coptai-cli
+    runs-on: ubuntu-latest
+    needs: core
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cli-${{ hashFiles('coptai-cli/Cargo.toml', 'Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cli-
+
+      - name: Build
+        run: cargo build -p coptai-cli
+
+      - name: Test
+        run: cargo test -p coptai-cli
+
+      - name: Check benches compile
+        run: cargo bench -p coptai-cli --no-run
