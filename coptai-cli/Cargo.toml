@@ -1,0 +1,25 @@
+[package]
+name = "coptai-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "coptai"
+path = "src/main.rs"
+
+[[bench]]
+name = "inference"
+harness = false
+
+[dependencies]
+coptai-core = { path = "../coptai-core" }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+indicatif = "0.17"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
