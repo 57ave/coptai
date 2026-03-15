@@ -1,5 +1,5 @@
 pub mod error;
-pub mod loader;
+pub mod loaders;
 pub mod model;
 pub mod progress;
 pub mod quantization;
@@ -8,7 +8,7 @@ pub use progress::{NoopProgress, ProgressReporter};
 
 pub use error::CoptaiError;
 pub use model::{CoptaiModel, OptimizedModel};
-pub use quantization::int8::{int8_dequantize, int8_quantize, Int8QuantizedTensor};
+pub use quantization::int8::{int8_dequantize, int8_quantize_raw, int8_quantize_tensor, Int8QuantizedTensor};
 
 pub use candle_core;
 
@@ -121,7 +121,7 @@ pub fn optimize(
                 let refs: Vec<&std::path::Path> =
                     model.source_paths.iter().map(|p| p.as_path()).collect();
                 let shards =
-                    loader::load_and_quantize_int8(&refs, &device)?;
+                    loaders::quantize_loader::load_and_quantize_int8(&refs, &device)?;
                 tracing::info!(
                     quantized = shards.quantized.len(),
                     kept_f32 = shards.other.len(),
