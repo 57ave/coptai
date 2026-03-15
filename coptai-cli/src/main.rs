@@ -84,10 +84,9 @@ fn main() -> Result<()> {
                 let refs: Vec<&std::path::Path> =
                     model.source_paths.iter().map(|p| p.as_path()).collect();
 
-                let shards = coptai_core::loader::load_and_quantize_int8_with_progress(
+                let shards = coptai_core::loaders::quantize_loader::load_and_quantize_int8(
                     &refs,
                     &device,
-                    &cli_progress,
                 )?;
 
                 cli_progress.finish();
@@ -137,7 +136,10 @@ fn main() -> Result<()> {
             println!(" Kept as F32    : {kept}  (embeddings, norms, biases)");
             println!(" Output dir     : {}", output_dir.display());
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            println!(" ⚠  Weights not yet serialised — save pass is TODO");
+
+            print!(" Saving weights …");
+            optimized.save(&output_dir)?;
+            println!(" ✓  {}", output_dir.join("model.safetensors").display());
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             println!();
         }
