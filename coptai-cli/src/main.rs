@@ -4,6 +4,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+mod progress;
+
 #[derive(Parser)]
 #[command(name = "coptai", about = "Coptai model optimisation toolkit")]
 struct Cli {
@@ -61,43 +63,85 @@ fn main() -> Result<()> {
             int4_awq,
         } => {
             use coptai_core::{
-                candle_core::Device,
-                optimize, DeviceConfig, OptimizerConfig, QuantizationConfig, QuantizationTarget,
+                candle_core::Device, DeviceConfig, OptimizerConfig, QuantizationConfig,
+                QuantizationTarget,
             };
-
-            tracing::info!(model_dir = %model_dir.display(), "Loading model");
 
             let device = Device::Cpu;
-            let model = coptai_core::model::CoptaiModel::from_dir(&model_dir, &device)?;
 
-            tracing::info!(tensors = model.weights.len(), "Model loaded");
+            if int4_awq {
+                return Err(anyhow::anyhow!("INT4/AWQ is Phase 2 — not yet implemented"));
+            }
 
-            let quant = if int4_awq {
-                Some(QuantizationConfig {
-                    target: QuantizationTarget::Int4Awq,
-                    calibration_samples: 128,
-                })
-            } else if int8 {
-                Some(QuantizationConfig {
-                    target: QuantizationTarget::Int8,
-                    calibration_samples: 512,
-                })
+            // Discover shard paths without loading any data.
+            let model = coptai_core::model::CoptaiModel::from_dir_lazy(&model_dir)?;
+            let shard_count = model.source_paths.len();
+
+            let (optimized, q, kept): (coptai_core::model::OptimizedModel, usize, usize) = if int8 {
+                // ── INT8 path: stream each shard with a live progress bar ──
+                let cli_progress = progress::CliProgress::new(shard_count as u64);
+
+                let refs: Vec<&std::path::Path> =
+                    model.source_paths.iter().map(|p| p.as_path()).collect();
+
+                let shards = coptai_core::loaders::quantize_loader::load_and_quantize_int8(
+                    &refs,
+                    &device,
+                )?;
+
+                cli_progress.finish();
+
+                let q = shards.quantized.len();
+                let kept = shards.other.len();
+
+                let config = OptimizerConfig {
+                    quantization: Some(QuantizationConfig {
+                        target: QuantizationTarget::Int8,
+                        calibration_samples: 512,
+                    }),
+                    pruning: None,
+                    graph_fusion: true,
+                    target_device: DeviceConfig::Cpu,
+                };
+                let optimized = coptai_core::model::OptimizedModel {
+                    inner: coptai_core::model::CoptaiModel {
+                        weights: shards.other,
+                        source_paths: model.source_paths,
+                    },
+                    device,
+                    config,
+                    quantized_weights: shards.quantized,
+                };
+                (optimized, q, kept)
             } else {
-                None
+                let model = coptai_core::model::CoptaiModel::from_dir(&model_dir, &device)?;
+                let total = model.weights.len();
+                let optimized = coptai_core::model::OptimizedModel {
+                    inner: model,
+                    device,
+                    config: OptimizerConfig::default(),
+                    quantized_weights: std::collections::HashMap::new(),
+                };
+                (optimized, 0, total)
             };
 
-            let config = OptimizerConfig {
-                quantization: quant,
-                pruning: None,
-                graph_fusion: true,
-                target_device: DeviceConfig::Cpu,
-            };
-
-            let _optimized = optimize(model, config)?;
-
-            // TODO: serialise optimised weights to output_dir
             std::fs::create_dir_all(&output_dir)?;
-            tracing::info!(output_dir = %output_dir.display(), "Optimisation complete (stub — weights not yet written)");
+
+            println!();
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!(" Optimisation complete");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!(" Total tensors  : {}", optimized.num_tensors());
+            println!(" INT8 quantized : {q}  (2-D weight matrices)");
+            println!(" Kept as F32    : {kept}  (embeddings, norms, biases)");
+            println!(" Output dir     : {}", output_dir.display());
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+            print!(" Saving weights …");
+            optimized.save(&output_dir)?;
+            println!(" ✓  {}", output_dir.join("model.safetensors").display());
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!();
         }
 
         Commands::Bench {
