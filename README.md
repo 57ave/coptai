@@ -83,6 +83,6 @@ curl http://localhost:8080/v1/messages \
 |---|---|
 | `safetensors` mmap loader | ✅ |
 | Anthropic-compatible HTTP server | ✅ |
-| INT8 quantization | 🔧 in progress |
+| INT8 quantization | ✅ |
 | FlashAttention integration | 📋 planned |
 | Paged KV cache | 📋 planned |
