@@ -1,9 +1,14 @@
 pub mod error;
-pub mod loader;
+pub mod loaders;
 pub mod model;
+pub mod progress;
+pub mod quantization;
+
+pub use progress::{NoopProgress, ProgressReporter};
 
 pub use error::CoptaiError;
 pub use model::{CoptaiModel, OptimizedModel};
+pub use quantization::int8::{int8_dequantize, int8_quantize_raw, int8_quantize_tensor, Int8QuantizedTensor};
 
 pub use candle_core;
 
@@ -99,17 +104,42 @@ pub fn optimize(
 
     let device = Device::try_from(&config.target_device)?;
 
-    // --- Graph fusion (no-op stub until pass is implemented) ---
     if config.graph_fusion {
         tracing::debug!("Graph fusion pass: enabled (stub)");
     }
 
     // --- Quantization pass ---
-    if let Some(ref _quant) = config.quantization {
-        tracing::debug!("Quantization pass: enabled (stub)");
-    }
+    let quantized_weights = if let Some(ref quant) = config.quantization {
+        match quant.target {
+            QuantizationTarget::Int8 => {
+                tracing::info!(
+                    tensors = model.weights.len(),
+                    "Quantization pass: INT8 streaming (per-channel symmetric)"
+                );
+                // Stream shard-by-shard: re-open the original paths so we never
+                // hold more than one shard's F32 in RAM at once.
+                let refs: Vec<&std::path::Path> =
+                    model.source_paths.iter().map(|p| p.as_path()).collect();
+                let shards =
+                    loaders::quantize_loader::load_and_quantize_int8(&refs, &device)?;
+                tracing::info!(
+                    quantized = shards.quantized.len(),
+                    kept_f32 = shards.other.len(),
+                    "INT8 pass complete"
+                );
+                shards.quantized
+            }
+            QuantizationTarget::Int4Awq | QuantizationTarget::Int4Gptq => {
+                return Err(CoptaiError::Unsupported(
+                    "INT4 quantization is Phase 2 — not yet implemented".into(),
+                ));
+            }
+        }
+    } else {
+        std::collections::HashMap::new()
+    };
 
-    // --- Pruning pass ---
+    // --- Pruning pass (stub) ---
     if let Some(ref _prune) = config.pruning {
         tracing::debug!("Pruning pass: enabled (stub)");
     }
@@ -118,5 +148,6 @@ pub fn optimize(
         inner: model,
         device,
         config,
+        quantized_weights,
     })
 }
