@@ -30,7 +30,7 @@ pub(super) fn decode_tensor(
                 .map_err(CoptaiError::Candle)
         }
         safetensors::Dtype::I32 => {
-            Tensor::from_raw_buffer(data, candle_core::DType::I64, shape, device)
+            Tensor::from_raw_buffer(data, candle_core::DType::I32, shape, device)
                 .map_err(CoptaiError::Candle)
         }
         other => Err(CoptaiError::Unsupported(format!(
