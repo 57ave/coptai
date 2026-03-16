@@ -4,7 +4,7 @@
 //! Agnostic from core — implements `coptai_core::ProgressReporter` so it can
 //! be passed directly into any loader function.
 
-use std::cell::Cell;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
@@ -54,11 +54,8 @@ pub struct CliProgress {
     pub shard_bar: ProgressBar,
     pub tensor_bar: ProgressBar,
     /// Tracks whether we've set the tensor bar length yet (reset each shard).
-    initialised: Cell<bool>,
+    initialised: AtomicBool,
 }
-
-// CliProgress is only used from main (single thread) so this is safe.
-unsafe impl Sync for CliProgress {}
 
 impl CliProgress {
     pub fn new(shard_count: u64) -> Self {
@@ -70,7 +67,7 @@ impl CliProgress {
             mp,
             shard_bar,
             tensor_bar,
-            initialised: Cell::new(false),
+            initialised: AtomicBool::new(false),
         }
     }
 
@@ -86,7 +83,7 @@ impl coptai_core::ProgressReporter for CliProgress {
         self.tensor_bar.reset();
         self.tensor_bar.set_length(tensor_count as u64);
         self.tensor_bar.set_message(name.to_string());
-        self.initialised.set(true);
+        self.initialised.store(true, Ordering::Relaxed);
     }
 
     fn on_tensor(&self, tensor_name: &str) {
