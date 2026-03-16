@@ -21,8 +21,6 @@ pub struct QuantizedShards {
 }
 
 #[instrument(skip(paths, device))]
-
-
 pub fn load_and_quantize_int8(
     paths: &[&Path],
     device: &Device,
